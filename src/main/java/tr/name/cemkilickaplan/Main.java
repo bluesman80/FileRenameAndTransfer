@@ -6,9 +6,10 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.stream.Stream;
 
+// First draft
+
 public class Main
 {
-
 	public static void main(String[] args)
 	{
 		try (Stream<Path> paths = Files
