@@ -11,8 +11,10 @@ import java.util.stream.Stream;
 public class Main
 {
 	private static String _sourcePath;// = "/Users/cemo/Downloads/FileTransferTrials";
-	private static String _targetPath;// = "/Users/cemo/Downloads/FileTransferTrials";
-	private static final List<String> EXTENSIONS = Arrays.asList("jpg", "png");
+	private static String _targetPathForImages;// = "/Users/cemo/Downloads/FileTransferTrials";
+	private static final List<String> IMAGE_EXTENSIONS = Arrays.asList("jpg", "png");
+	// For future use
+	//private static final List<String> VIDEO_EXTENSIONS = Arrays.asList("mpg", "mp4", "mpeg");
 
 	public static void main(String[] args)
 	{
@@ -23,15 +25,24 @@ public class Main
 		}
 
 		_sourcePath = args[0];
-		_targetPath = args[1];
+		_targetPathForImages = args[1];
 
-		final Path target = Paths.get(_targetPath);
+		if (!Files.exists(Paths.get(_sourcePath)))
+		{
+			System.err.println("Source path does not exist: " + _sourcePath);
+		}
+
+		final Path targetPathForImages = createPathIfNotExists(_targetPathForImages);
+		if (targetPathForImages == null)
+		{
+			return;
+		}
 
 		try (Stream<Path> paths = Files.walk(Paths.get(_sourcePath)).sorted())
 		{
 			Map<String, Integer> fileNameCountMap = new HashMap<>();
 
-			AtomicInteger fileCount = new AtomicInteger(0);
+			AtomicInteger fileCount = new AtomicInteger(1);
 			paths.forEach(file ->
 			{
 				if (file.toFile().isFile())
@@ -39,7 +50,7 @@ public class Main
 					final String fileName = file.getFileName().toString();
 					final String fileExtension = fileName.substring(fileName.indexOf('.') + 1, fileName.length()).toLowerCase();
 
-					if (EXTENSIONS.contains(fileExtension))
+					if (IMAGE_EXTENSIONS.contains(fileExtension))
 					{
 						System.out.println(String.format("Found (%s): %s", fileCount.getAndIncrement(), fileName));
 
@@ -59,11 +70,12 @@ public class Main
 
 							fileNameCountMap.replace(formattedFileCreationTime, nextCount);
 
-							final String newName = formattedFileCreationTime + "_" + String.format("%03d", nextCount) + "." + fileExtension;
+							final String newName =
+								formattedFileCreationTime + "_" + String.format("%03d", nextCount) + "." + fileExtension;
 
-							Files.move(file, target.resolve(newName));
+							Files.move(file, targetPathForImages.resolve(newName));
 
-							System.out.println(String.format("\t\tChanged file name to: %s", newName));
+							System.out.println(String.format("\t\tMoved file to: %s as %s", _targetPathForImages, newName));
 						}
 						catch (final IOException e)
 						{
@@ -77,10 +89,31 @@ public class Main
 		{
 			e.printStackTrace();
 		}
-
 	}
 
-	static String getFormattedFileCreationTime(final FileTime fileTime)
+	private static Path createPathIfNotExists(String targetPath)
+	{
+		final Path targetPathForImages = Paths.get(targetPath);
+		if (!Files.exists(targetPathForImages))
+		{
+			try
+			{
+				Files.createDirectory(targetPathForImages);
+
+				System.out.println("\nTarget path is created: " + targetPath);
+				System.out.println("\n\n");
+			}
+			catch (final IOException e)
+			{
+				System.err.println("Error creating the target directory: " + targetPath);
+				e.printStackTrace();
+				return null;
+			}
+		}
+		return targetPathForImages;
+	}
+
+	private static String getFormattedFileCreationTime(final FileTime fileTime)
 	{
 		final String fileTimeString = fileTime.toString();
 		return fileTimeString.substring(0, fileTimeString.indexOf('T')).replace("-", "");
