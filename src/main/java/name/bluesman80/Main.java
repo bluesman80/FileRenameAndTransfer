@@ -5,46 +5,46 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 public class Main
 {
-	private static String _sourcePath;// = "/Users/cemo/Downloads/FileTransferTrials";
-	private static String _targetPathForImages;// = "/Users/cemo/Downloads/FileTransferTrials";
 	private static final List<String> IMAGE_EXTENSIONS = Arrays.asList("jpg", "png");
-	// For future use
+	// For future use:
 	//private static final List<String> VIDEO_EXTENSIONS = Arrays.asList("mpg", "mp4", "mpeg");
 
 	public static void main(String[] args)
 	{
 		if (args.length < 2)
 		{
-			System.out.println("Usage: ftr <source path> <target path>");
+			System.out.println("Usage: frt <source path> <target path>");
 			return;
 		}
 
-		_sourcePath = args[0];
-		_targetPathForImages = args[1];
+		String sourcePath = args[0];
+		String targetImagePath = args[1];
 
-		if (!Files.exists(Paths.get(_sourcePath)))
+		if (!Files.exists(Paths.get(sourcePath)))
 		{
-			System.err.println("Source path does not exist: " + _sourcePath);
+			System.err.println("Source path does not exist: " + sourcePath);
 		}
 
-		final Path targetPathForImages = createPathIfNotExists(_targetPathForImages);
+		Path targetPathForImages = createPathIfNotExists(targetImagePath);
 		if (targetPathForImages == null)
 		{
 			return;
 		}
 
-		try (Stream<Path> paths = Files.walk(Paths.get(_sourcePath)).sorted())
+		try (Stream<Path> paths = Files.walk(Paths.get(sourcePath)).sorted())
 		{
 			Map<String, Integer> fileNameCountMap = new HashMap<>();
 
-			AtomicInteger fileCount = new AtomicInteger(1);
-			paths.forEach(file ->
+			int fileCount = 1;
+
+			for (Iterator<Path> pathIterator = paths.iterator(); pathIterator.hasNext(); )
 			{
+				Path file = pathIterator.next();
+
 				if (file.toFile().isFile())
 				{
 					final String fileName = file.getFileName().toString();
@@ -52,7 +52,7 @@ public class Main
 
 					if (IMAGE_EXTENSIONS.contains(fileExtension))
 					{
-						System.out.println(String.format("Found (%s): %s", fileCount.getAndIncrement(), fileName));
+						System.out.println(String.format("Found (%s): %s", fileCount++, fileName));
 
 						try
 						{
@@ -70,12 +70,36 @@ public class Main
 
 							fileNameCountMap.replace(formattedFileCreationTime, nextCount);
 
-							final String newName =
+							String newName =
 								formattedFileCreationTime + "_" + String.format("%03d", nextCount) + "." + fileExtension;
 
-							Files.move(file, targetPathForImages.resolve(newName));
+							final String targetSubPath = formattedFileCreationTime.substring(0, 6);
 
-							System.out.println(String.format("\t\tMoved file to: %s as %s", _targetPathForImages, newName));
+							targetPathForImages = createPathIfNotExists(targetImagePath + "/" + targetSubPath);
+
+							if (targetPathForImages != null)
+							{
+								final Path finalTargetPath = Paths.get(targetPathForImages + "/" + newName);
+
+								if (Files.exists(finalTargetPath))
+								{
+									//@formatter:off
+									newName = newName.substring(0, newName.indexOf('.'))
+										+ "-"
+										+ String.valueOf(System.currentTimeMillis()).substring(8, 13)
+										+ ".jpg";
+									//@formatter:on
+								}
+
+								Files.copy(file, targetPathForImages.resolve(newName));
+
+								System.out.println(String.format("\t\tCopied file to: %s as %s", targetSubPath, newName));
+							}
+							else
+							{
+								System.err.println("Error creating target sub-directory: " + targetSubPath);
+							}
+
 						}
 						catch (final IOException e)
 						{
@@ -83,7 +107,7 @@ public class Main
 						}
 					}
 				}
-			});
+			}
 		}
 		catch (final IOException e)
 		{
@@ -91,31 +115,32 @@ public class Main
 		}
 	}
 
-	private static Path createPathIfNotExists(String targetPath)
+	private static Path createPathIfNotExists(String path)
 	{
-		final Path targetPathForImages = Paths.get(targetPath);
-		if (!Files.exists(targetPathForImages))
+		final Path targetPath = Paths.get(path);
+
+		if (!Files.exists(targetPath))
 		{
 			try
 			{
-				Files.createDirectory(targetPathForImages);
+				Files.createDirectory(targetPath);
 
-				System.out.println("\nTarget path is created: " + targetPath);
+				System.out.println("\nTarget path is created: " + path);
 				System.out.println("\n\n");
 			}
 			catch (final IOException e)
 			{
-				System.err.println("Error creating the target directory: " + targetPath);
+				System.err.println("Error creating the target directory: " + path);
 				e.printStackTrace();
 				return null;
 			}
 		}
-		return targetPathForImages;
+		return targetPath;
 	}
 
 	private static String getFormattedFileCreationTime(final FileTime fileTime)
 	{
 		final String fileTimeString = fileTime.toString();
-		return fileTimeString.substring(0, fileTimeString.indexOf('T')).replace("-", "");
+		return fileTimeString.substring(0, 10).replace("-", "");
 	}
 }
