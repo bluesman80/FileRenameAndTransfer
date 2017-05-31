@@ -3,15 +3,13 @@ package name.bluesman80;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.util.*;
 import java.util.stream.Stream;
 
 public class Main
 {
 	private static final List<String> IMAGE_EXTENSIONS = Arrays.asList("jpg", "png");
-	// For future use:
-	//private static final List<String> VIDEO_EXTENSIONS = Arrays.asList("mpg", "mp4", "mpeg");
+	private static final List<String> VIDEO_EXTENSIONS = Arrays.asList("mpg", "mp4", "mpeg");
 
 	public static void main(String[] args)
 	{
@@ -22,15 +20,21 @@ public class Main
 		}
 
 		String sourcePath = args[0];
-		String targetImagePath = args[1];
+		String targetFilePath = args[1];
+
+		boolean getNameFromCreationDate = true;
+		if (args.length == 3)
+		{
+			getNameFromCreationDate = Boolean.valueOf(args[2]);
+		}
 
 		if (!Files.exists(Paths.get(sourcePath)))
 		{
 			System.err.println("Source path does not exist: " + sourcePath);
 		}
 
-		Path targetPathForImages = createPathIfNotExists(targetImagePath);
-		if (targetPathForImages == null)
+		Path targetPathForFiles = createPathIfNotExists(targetFilePath);
+		if (targetPathForFiles == null)
 		{
 			return;
 		}
@@ -50,15 +54,27 @@ public class Main
 					final String fileName = file.getFileName().toString();
 					final String fileExtension = fileName.substring(fileName.indexOf('.') + 1, fileName.length()).toLowerCase();
 
-					if (IMAGE_EXTENSIONS.contains(fileExtension))
+					final boolean isImage = IMAGE_EXTENSIONS.contains(fileExtension);
+					final boolean isVideo = !isImage && VIDEO_EXTENSIONS.contains(fileExtension);
+
+					if (isImage || isVideo)
 					{
 						System.out.println(String.format("Found (%s): %s", fileCount++, fileName));
 
 						try
 						{
-							BasicFileAttributes fileAttributes = Files.readAttributes(file, BasicFileAttributes.class);
+							String formattedFileCreationTime = getFormattedFileCreationTime(fileName);
 
-							final String formattedFileCreationTime = getFormattedFileCreationTime(fileAttributes.creationTime());
+							if (formattedFileCreationTime == null || getNameFromCreationDate)
+							{
+								formattedFileCreationTime = getFormattedFileCreationTime(file);
+							}
+
+							if (formattedFileCreationTime == null)
+							{
+								System.err.println("\n\n***** SKIPPED A FILE: " + fileName);
+								return;
+							}
 
 							if (!fileNameCountMap.containsKey(formattedFileCreationTime))
 							{
@@ -75,14 +91,15 @@ public class Main
 
 							final String targetSubPath = formattedFileCreationTime.substring(0, 6);
 
-							targetPathForImages = createPathIfNotExists(targetImagePath + "/" + targetSubPath);
+							targetPathForFiles = createPathIfNotExists(targetFilePath + "/" + targetSubPath);
 
-							if (targetPathForImages != null)
+							if (targetPathForFiles != null)
 							{
-								final Path finalTargetPath = Paths.get(targetPathForImages + "/" + newName);
+								final Path finalTargetPath = Paths.get(targetPathForFiles + "/" + newName);
 
 								if (Files.exists(finalTargetPath))
 								{
+									// FIXME Change the hard coded extension
 									//@formatter:off
 									newName = newName.substring(0, newName.indexOf('.'))
 										+ "-"
@@ -91,7 +108,7 @@ public class Main
 									//@formatter:on
 								}
 
-								Files.copy(file, targetPathForImages.resolve(newName));
+								Files.copy(file, targetPathForFiles.resolve(newName));
 
 								System.out.println(String.format("\t\tCopied file to: %s as %s", targetSubPath, newName));
 							}
@@ -138,9 +155,39 @@ public class Main
 		return targetPath;
 	}
 
-	private static String getFormattedFileCreationTime(final FileTime fileTime)
+	private static String getFormattedFileCreationTime(final String fileName)
 	{
-		final String fileTimeString = fileTime.toString();
-		return fileTimeString.substring(0, 10).replace("-", "");
+		String result = null;
+		try
+		{
+			final int beginIndex = fileName.indexOf("20");
+
+			result = fileName.substring(beginIndex, beginIndex + 8);
+		}
+		catch (StringIndexOutOfBoundsException e)
+		{
+			// do nothing
+		}
+
+		return result;
+	}
+
+	private static String getFormattedFileCreationTime(final Path file)
+	{
+		String result = null;
+		try
+		{
+			final BasicFileAttributes fileAttributes = Files.readAttributes(file, BasicFileAttributes.class);
+
+			final String fileTimeString = fileAttributes.creationTime().toString();
+
+			result = fileTimeString.substring(0, 10).replace("-", "");
+		}
+		catch (IOException e)
+		{
+			e.printStackTrace();
+		}
+
+		return result;
 	}
 }
